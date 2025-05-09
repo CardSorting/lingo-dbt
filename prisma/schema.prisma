@@ -1,0 +1,241 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User Domain
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  password      String?   // Hashed
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastActive    DateTime  @default(now())
+
+  // Relations
+  accounts         Account[]
+  sessions         Session[]
+  progress         UserProgress?
+  achievements     UserAchievement[]
+}
+
+model Account {
+  id                String   @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?  @db.Text
+  access_token      String?  @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?  @db.Text
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Progress Domain
+model UserProgress {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  totalXp       Int      @default(0)
+  level         Int      @default(1)
+  currentStreak Int      @default(0)
+  longestStreak Int      @default(0)
+  lastCompletedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleProgresses ModuleProgress[]
+}
+
+model ModuleProgress {
+  id              String   @id @default(uuid())
+  userProgressId  String
+  moduleId        String
+  completedLessons Int     @default(0)
+  totalLessons    Int     @default(0)
+  lastCompletedAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  userProgress    UserProgress @relation(fields: [userProgressId], references: [id], onDelete: Cascade)
+  module          Module @relation(fields: [moduleId], references: [id])
+  skillProgresses SkillProgress[]
+}
+
+model SkillProgress {
+  id                String   @id @default(uuid())
+  moduleProgressId  String
+  skillId           String
+  masteryLevel      Int      @default(0)
+  isUnlocked        Boolean  @default(false)
+  unlockedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  moduleProgress    ModuleProgress @relation(fields: [moduleProgressId], references: [id], onDelete: Cascade)
+  skill             Skill @relation(fields: [skillId], references: [id])
+  lessonProgresses  LessonProgress[]
+}
+
+model LessonProgress {
+  id              String   @id @default(uuid())
+  skillProgressId String
+  lessonId        String
+  isCompleted     Boolean  @default(false)
+  attemptCount    Int      @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  skillProgress    SkillProgress @relation(fields: [skillProgressId], references: [id], onDelete: Cascade)
+  lesson           Lesson @relation(fields: [lessonId], references: [id])
+  exerciseAttempts ExerciseAttempt[]
+}
+
+model ExerciseAttempt {
+  id               String   @id @default(uuid())
+  lessonProgressId String
+  exerciseId       String
+  isCorrect        Boolean
+  userAnswer       String
+  attemptedAt      DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  lessonProgress   LessonProgress @relation(fields: [lessonProgressId], references: [id], onDelete: Cascade)
+  exercise         Exercise @relation(fields: [exerciseId], references: [id])
+}
+
+// Learning Domain
+model Module {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @db.Text
+  orderIndex  Int
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  skills           Skill[]
+  moduleProgresses ModuleProgress[]
+}
+
+model Skill {
+  id          String   @id @default(uuid())
+  moduleId    String
+  name        String
+  description String   @db.Text
+  orderIndex  Int
+  imageUrl    String?
+  isAdvanced  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  module          Module @relation(fields: [moduleId], references: [id])
+  lessons         Lesson[]
+  skillProgresses SkillProgress[]
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  skillId     String
+  name        String
+  description String   @db.Text
+  orderIndex  Int
+  xpReward    Int      @default(10)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  skill            Skill @relation(fields: [skillId], references: [id])
+  exercises        Exercise[]
+  lessonProgresses LessonProgress[]
+}
+
+model Exercise {
+  id              String   @id @default(uuid())
+  lessonId        String
+  type            String   // e.g., "multiple_choice", "text_input", "pairing"
+  question        String   @db.Text
+  correctAnswer   String
+  options         String[] // JSON array for multiple choice options
+  explanation     String?  @db.Text
+  difficultyLevel Int      @default(1)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  lesson           Lesson @relation(fields: [lessonId], references: [id])
+  exerciseAttempts ExerciseAttempt[]
+}
+
+// Gamification Domain
+model Achievement {
+  id          String   @id @default(uuid())
+  name        String
+  description String   @db.Text
+  imageUrl    String?
+  criteria    String   @db.Text
+  xpReward    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(uuid())
+  userId        String
+  achievementId String
+  earnedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
