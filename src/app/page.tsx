@@ -16,10 +16,10 @@ export default function Home() {
             <span className="text-2xl font-bold text-primary-600">Lingo-DBT</span>
           </div>
           <div className="flex items-center space-x-4">
-            <Link href="/auth/signin">
+            <Link href="/signin">
               <Button variant="outline">Sign In</Button>
             </Link>
-            <Link href="/auth/register">
+            <Link href="/register">
               <Button>Get Started</Button>
             </Link>
           </div>
@@ -41,7 +41,7 @@ export default function Home() {
                 achievement systems.
               </p>
               <div className="mt-8 flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
-                <Link href="/auth/register">
+                <Link href="/register">
                   <Button size="lg" className="w-full sm:w-auto">
                     Start Your Journey
                     <FiArrowRight className="ml-2" />
@@ -156,7 +156,7 @@ export default function Home() {
               Join thousands of users who are building emotional resilience skills with Lingo-DBT.
             </p>
             <div className="mt-8">
-              <Link href="/auth/register">
+              <Link href="/register">
                 <Button size="lg" className="bg-white text-primary-600 hover:bg-primary-50">
                   Create Free Account
                 </Button>
