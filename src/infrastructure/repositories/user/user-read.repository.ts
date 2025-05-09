@@ -21,11 +21,11 @@ export class UserReadRepository implements IUserReadRepository {
 
   async findAll(): Promise<UserEntity[]> {
     const users = await prismaClient.user.findMany();
-    return users.map(user => this.mapPrismaUserToEntity(user) as UserEntity);
+    return users.map((user: Record<string, any>) => this.mapPrismaUserToEntity(user) as UserEntity);
   }
 
   // Helper method to map Prisma User model to our domain User entity
-  private mapPrismaUserToEntity(user: any | null): UserEntity | null {
+  private mapPrismaUserToEntity(user: Record<string, any> | null): UserEntity | null {
     if (!user) return null;
 
     return {
