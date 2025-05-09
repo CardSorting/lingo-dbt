@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prismaClient } from '@/infrastructure/database/prisma-client';
-import { hashPassword } from '@/utils/auth';
+import { container } from '@/infrastructure/di-container';
 import { RegisterUserCommandHandler } from '@/application/commands/register-user.command';
-import { UserWriteRepository } from '@/infrastructure/repositories/user/user-write.repository';
+import { UserRegisteredEventHandler } from '@/application/event-handlers/user-registered.handler';
+import { UserRegisteredEvent } from '@/core/events/user-registered.event';
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,28 +30,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create a UserWriteRepository instance
-    const userWriteRepository = new UserWriteRepository();
+    // Get dependencies from container
+    const userWriteRepository = container.userWriteRepository;
+    const eventBus = container.eventBus;
 
-    // Create a command handler
-    const commandHandler = new RegisterUserCommandHandler(userWriteRepository);
+    // Create command handler
+    const commandHandler = new RegisterUserCommandHandler(userWriteRepository, eventBus);
+
+    // Setup event handler for the user registered event
+    // In a real app, this would be done at startup, not on each request
+    const userRegisteredHandler = new UserRegisteredEventHandler({
+      createUserProgress: async (userId: string) => {
+        // Create default user progress
+        await prismaClient.userProgress.create({
+          data: {
+            userId,
+            totalXp: 0,
+            level: 1,
+            currentStreak: 0,
+            longestStreak: 0,
+          },
+        });
+      }
+    } as any); // TypeScript hack since we don't have a full implementation
+
+    // Register the event handler
+    eventBus.subscribe(UserRegisteredEvent, userRegisteredHandler);
 
     // Execute the command
     const userId = await commandHandler.execute({
       email,
       name,
       password,
-    });
-
-    // Create default user progress
-    await prismaClient.userProgress.create({
-      data: {
-        userId,
-        totalXp: 0,
-        level: 1,
-        currentStreak: 0,
-        longestStreak: 0,
-      },
     });
 
     return NextResponse.json(

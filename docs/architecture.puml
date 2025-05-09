@@ -1,0 +1,109 @@
+@startuml LinGo-DBT Architecture
+
+' Styling
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+skinparam backgroundColor white
+skinparam arrowColor #333333
+skinparam componentFontSize 14
+skinparam packageFontSize 16
+skinparam classBackgroundColor #FEFECE
+skinparam classBorderColor #A80036
+skinparam noteBackgroundColor #FFFFCC
+skinparam noteBorderColor #999999
+
+' Title
+title LinGo-DBT Architecture - Clean Architecture with CQRS and DDD
+
+' Packages
+package "Presentation Layer" {
+  component "Next.js Pages" as Pages
+  component "React Components" as Components
+  component "UI State" as UIState
+}
+
+package "Application Layer" {
+  component "Commands" as Commands
+  component "Command Handlers" as CommandHandlers
+  component "Queries" as Queries
+  component "Query Handlers" as QueryHandlers
+  component "Event Handlers" as EventHandlers
+  component "DTOs" as DTOs
+}
+
+package "Domain Layer" {
+  component "Entities" as Entities
+  component "Value Objects" as ValueObjects
+  component "Domain Events" as DomainEvents
+  component "Repository Interfaces" as RepoInterfaces
+  component "Domain Services" as DomainServices
+}
+
+package "Infrastructure Layer" {
+  component "Command Bus" as CommandBus
+  component "Query Bus" as QueryBus
+  component "Event Bus" as EventBus
+  component "Repository Implementations" as Repositories
+  component "Prisma ORM" as Prisma
+  component "Next Auth" as NextAuth
+  component "Dependency Injection" as DIContainer
+}
+
+' Connections - Presentation to Application
+Pages --> Commands : creates
+Pages --> Queries : creates
+Components --> UIState : updates/reads
+UIState --> DTOs : consumes
+
+' Connections - Application to Domain
+CommandHandlers --> Entities : manipulates
+CommandHandlers --> RepoInterfaces : uses
+CommandHandlers --> DomainEvents : publishes
+QueryHandlers --> RepoInterfaces : uses
+QueryHandlers --> DTOs : creates
+EventHandlers --> RepoInterfaces : uses
+EventHandlers --> Entities : updates
+
+' Connections - Domain
+Entities --> ValueObjects : uses
+Entities --> DomainEvents : generates
+RepoInterfaces --> Entities : defines contracts for
+
+' Connections - Infrastructure
+CommandBus --> CommandHandlers : dispatches to
+QueryBus --> QueryHandlers : dispatches to
+EventBus --> EventHandlers : dispatches to
+EventBus --> DomainEvents : propagates
+Repositories --> RepoInterfaces : implements
+Repositories --> Prisma : uses
+DIContainer --> CommandBus : manages
+DIContainer --> QueryBus : manages
+DIContainer --> EventBus : manages
+DIContainer --> Repositories : manages
+
+' CQRS Flow
+note bottom of CommandHandlers
+  Commands change state
+  but don't return data
+end note
+
+note bottom of QueryHandlers
+  Queries return data
+  but don't change state
+end note
+
+note bottom of EventBus
+  Events enable loose coupling
+  between components
+end note
+
+' Main Bounded Contexts
+note right of Entities
+  Main Bounded Contexts:
+  - Identity (User, Auth)
+  - Learning (Modules, Skills, Lessons)
+  - Progress (User advancement)
+  - Gamification (Achievements, XP)
+end note
+
+@enduml

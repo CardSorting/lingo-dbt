@@ -1,15 +1,28 @@
-import { CreateUserDTO } from '../dtos/user.dto';
+import { ICommand, ICommandHandler } from './command.interface';
 import { IUserWriteRepository } from '../../core/repositories/user-repository.interface';
 import { hashPassword } from '../../utils/auth';
+import { IEventBus } from '../../core/events/event-bus.interface';
+import { UserRegisteredEvent } from '../../core/events/user-registered.event';
 
-export interface RegisterUserCommand {
+/**
+ * Command to register a new user in the system.
+ * Implements the ICommand interface from the CQRS pattern.
+ */
+export interface RegisterUserCommand extends ICommand {
   email: string;
   name?: string;
   password?: string; // Optional if using OAuth
 }
 
-export class RegisterUserCommandHandler {
-  constructor(private userWriteRepository: IUserWriteRepository) {}
+/**
+ * Handler for the RegisterUserCommand.
+ * Implements the ICommandHandler interface from the CQRS pattern.
+ */
+export class RegisterUserCommandHandler implements ICommandHandler<RegisterUserCommand, string> {
+  constructor(
+    private userWriteRepository: IUserWriteRepository,
+    private eventBus: IEventBus
+  ) {}
 
   async execute(command: RegisterUserCommand): Promise<string> {
     const { email, name, password } = command;
@@ -33,6 +46,15 @@ export class RegisterUserCommandHandler {
 
     // Create user
     const user = await this.userWriteRepository.create(userData);
+
+    // Publish domain event
+    await this.eventBus.publish(
+      new UserRegisteredEvent(
+        user.id,
+        user.email,
+        !!password // Indicates if this is a password-based registration or OAuth
+      )
+    );
 
     return user.id;
   }

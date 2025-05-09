@@ -1,81 +1,126 @@
-import { 
-  IExerciseAttemptWriteRepository 
-} from '../../core/repositories/progress-repository.interface';
-import { IUserProgressWriteRepository } from '../../core/repositories/progress-repository.interface';
-import { ILessonProgressWriteRepository } from '../../core/repositories/progress-repository.interface';
-import { IExerciseReadRepository } from '../../core/repositories/learning-repository.interface';
+import { ICommand, ICommandHandler } from './command.interface';
+import { IEventBus } from '../../core/events/event-bus.interface';
+import { ExerciseCompletedEvent } from '../../core/events/exercise-completed.event';
+import { IProgressWriteRepository } from '../../core/repositories/progress-repository.interface';
+import { ILearningReadRepository } from '../../core/repositories/learning-repository.interface';
 
-export interface CompleteExerciseCommand {
+/**
+ * Command to record a user's attempt at completing an exercise.
+ */
+export interface CompleteExerciseCommand extends ICommand {
   userId: string;
-  lessonProgressId: string;
   exerciseId: string;
   userAnswer: string;
 }
 
-export class CompleteExerciseCommandHandler {
+/**
+ * Handler for the CompleteExerciseCommand.
+ * This handler checks if the answer is correct, updates progress, and emits events.
+ */
+export class CompleteExerciseCommandHandler implements ICommandHandler<CompleteExerciseCommand, boolean> {
   constructor(
-    private exerciseAttemptWriteRepository: IExerciseAttemptWriteRepository,
-    private exerciseReadRepository: IExerciseReadRepository,
-    private lessonProgressWriteRepository: ILessonProgressWriteRepository,
-    private userProgressWriteRepository: IUserProgressWriteRepository
+    private learningReadRepository: ILearningReadRepository,
+    private progressWriteRepository: IProgressWriteRepository,
+    private eventBus: IEventBus
   ) {}
 
-  async execute(command: CompleteExerciseCommand): Promise<{ 
-    isCorrect: boolean; 
-    xpEarned: number;
-    isLessonCompleted: boolean;
-  }> {
-    const { userId, lessonProgressId, exerciseId, userAnswer } = command;
+  /**
+   * Execute the command to complete an exercise.
+   * @param command The command containing the exercise attempt data
+   * @returns Boolean indicating if the answer was correct
+   */
+  async execute(command: CompleteExerciseCommand): Promise<boolean> {
+    const { userId, exerciseId, userAnswer } = command;
 
-    // Get the exercise to check the correct answer
-    const exercise = await this.exerciseReadRepository.findById(exerciseId);
+    // 1. Get the exercise to validate the answer
+    const exercise = await this.learningReadRepository.getExerciseById(exerciseId);
     if (!exercise) {
-      throw new Error('Exercise not found');
+      throw new Error(`Exercise not found: ${exerciseId}`);
     }
 
-    // Check if the answer is correct
+    // 2. Get the lesson, skill, and module information for the exercise
+    const lesson = await this.learningReadRepository.getLessonById(exercise.lessonId);
+    if (!lesson) {
+      throw new Error(`Lesson not found: ${exercise.lessonId}`);
+    }
+
+    const skill = await this.learningReadRepository.getSkillById(lesson.skillId);
+    if (!skill) {
+      throw new Error(`Skill not found: ${lesson.skillId}`);
+    }
+
+    // 3. Check if the answer is correct
+    // Note: In a real implementation, we'd need more sophisticated answer checking
+    // based on exercise type (multiple choice, text input, etc.)
     const isCorrect = this.checkAnswer(exercise.correctAnswer, userAnswer);
 
-    // Create the exercise attempt
-    await this.exerciseAttemptWriteRepository.create({
-      lessonProgressId,
+    // 4. Get or create lesson progress
+    const lessonProgress = await this.progressWriteRepository.getOrCreateLessonProgress(
+      userId,
+      lesson.id,
+      skill.id,
+      skill.moduleId
+    );
+
+    // 5. Record the exercise attempt
+    const attemptCount = lessonProgress.attemptCount + 1;
+    await this.progressWriteRepository.recordExerciseAttempt({
+      lessonProgressId: lessonProgress.id,
       exerciseId,
       isCorrect,
       userAnswer,
       attemptedAt: new Date()
     });
 
-    // Increment the attempt count for this lesson
-    await this.lessonProgressWriteRepository.incrementAttemptCount(lessonProgressId);
+    // 6. Update lesson progress
+    await this.progressWriteRepository.updateLessonProgress(lessonProgress.id, {
+      attemptCount,
+      // If this was the last exercise and it's correct, mark the lesson as completed
+      isCompleted: lessonProgress.isCompleted || 
+        (isCorrect && await this.isLastExerciseInLesson(lessonProgress.id, exerciseId)),
+      completedAt: lessonProgress.isCompleted ? lessonProgress.completedAt : 
+        (isCorrect ? new Date() : undefined)
+    });
 
-    // If the answer is correct, add XP to the user
-    let xpEarned = 0;
+    // 7. If correct, award XP and update user progress
     if (isCorrect) {
-      // Award more XP for higher difficulty levels
-      xpEarned = 10 * exercise.difficultyLevel;
-      await this.userProgressWriteRepository.addXp(userId, xpEarned);
-      
-      // Update the streak
-      await this.userProgressWriteRepository.updateStreak(userId);
+      await this.progressWriteRepository.addUserXp(userId, lesson.xpReward);
+      await this.progressWriteRepository.updateUserStreak(userId);
     }
 
-    // Determine if the lesson is completed (in a real implementation, 
-    // we would check if all required exercises are completed)
-    const isLessonCompleted = isCorrect;
-    if (isLessonCompleted) {
-      await this.lessonProgressWriteRepository.markAsCompleted(lessonProgressId);
-    }
+    // 8. Emit domain event for the completed exercise
+    await this.eventBus.publish(
+      new ExerciseCompletedEvent(
+        userId,
+        exerciseId,
+        lesson.id,
+        skill.id,
+        skill.moduleId,
+        isCorrect,
+        userAnswer,
+        attemptCount
+      )
+    );
 
-    return {
-      isCorrect,
-      xpEarned,
-      isLessonCompleted
-    };
+    // Return whether the answer was correct
+    return isCorrect;
   }
 
+  /**
+   * Check if an answer is correct.
+   * This is a simplified implementation that just does string comparison.
+   * In a real app, this would be more sophisticated based on exercise type.
+   */
   private checkAnswer(correctAnswer: string, userAnswer: string): boolean {
-    // Simple string comparison for now - could be extended with more sophisticated
-    // comparison logic depending on exercise type
     return correctAnswer.trim().toLowerCase() === userAnswer.trim().toLowerCase();
+  }
+
+  /**
+   * Check if this is the last exercise in the lesson.
+   */
+  private async isLastExerciseInLesson(lessonProgressId: string, exerciseId: string): Promise<boolean> {
+    // Here we would check if all exercises in the lesson have been completed
+    // This is a simplified implementation
+    return true; // For now, assume it's the last exercise
   }
 }
