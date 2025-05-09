@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prismaClient } from '../../../../infrastructure/database/prisma-client';
-import { hashPassword } from '../../../../utils/auth';
-import { RegisterUserCommandHandler } from '../../../../application/commands/register-user.command';
-import { UserWriteRepository } from '../../../../infrastructure/repositories/user/user-write.repository';
+import { prismaClient } from '@/infrastructure/database/prisma-client';
+import { hashPassword } from '@/utils/auth';
+import { RegisterUserCommandHandler } from '@/application/commands/register-user.command';
+import { UserWriteRepository } from '@/infrastructure/repositories/user/user-write.repository';
 
 export async function POST(req: NextRequest) {
   try {

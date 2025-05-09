@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Button } from "../components/ui/button";
+import { Button } from "@/components/ui/button";
 import { FiArrowRight, FiCheck, FiAward, FiStar } from "react-icons/fi";
+import Head from "next/head";
 
 export default function Home() {
   return (

@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Poppins } from "next/font/google";
+import { NextAuthProvider } from "@/components/layouts/auth-provider";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const poppins = Poppins({ 
+  weight: ['400', '500', '600', '700'],
+  subsets: ["latin"], 
+  variable: "--font-poppins" 
+});
 
 export const metadata: Metadata = {
   title: "Lingo-DBT - Dialectical Behavior Therapy Training",
@@ -16,8 +22,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="lingodbt">
-      <body className={`${inter.variable} font-sans antialiased`}>
-        {children}
+      <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
+        <NextAuthProvider>
+          {children}
+        </NextAuthProvider>
       </body>
     </html>
   );
